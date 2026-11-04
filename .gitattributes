@@ -1,0 +1,21 @@
+# Auto detect text files and normalize line endings
+* text=auto
+
+# Binary files
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.flac binary
+*.npy binary
+*.npz binary
+*.h5 binary
+*.keras binary
+*.tflite binary
+*.onnx binary
+*.pt binary
+*.pth binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
