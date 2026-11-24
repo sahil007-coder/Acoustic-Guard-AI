@@ -97,9 +97,20 @@ class AcousticGuardModel:
         if os.path.exists(self.weights_path):
             try:
                 self.model = keras.models.load_model(self.weights_path)
-            except Exception:
-                self.model = build_acousticguard_cnn()
-        else:
+                print(f"[AcousticGuardModel] Loaded trained model weights from {self.weights_path}")
+                return
+            except Exception as e:
+                print(f"[AcousticGuardModel] Failed to load {self.weights_path} ({e}). Retraining...")
+
+        # Auto-train and export weights if missing
+        print("[AcousticGuardModel] Training model weights on initial startup...")
+        try:
+            from train import train_and_export
+            train_and_export()
+            self.model = keras.models.load_model(self.weights_path)
+            print(f"[AcousticGuardModel] Model trained and loaded successfully from {self.weights_path}")
+        except Exception as e:
+            print(f"[AcousticGuardModel] Fallback to direct model compilation: {e}")
             self.model = build_acousticguard_cnn()
 
     def predict(self, spectrogram: np.ndarray) -> dict:

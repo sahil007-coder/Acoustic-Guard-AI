@@ -91,7 +91,7 @@ ESC-50-master/
 !data/**/.gitkeep
 !models/**/.gitkeep
 
-# Machine Learning Models, Weights, and Checkpoints
+# Machine Learning Models, Weights, and Checkpoints (Trained automatically on startup)
 models/*.h5
 models/*.keras
 models/*.tflite
@@ -100,9 +100,6 @@ models/variables/
 *.h5
 *.keras
 *.ckpt
-
-# Whitelist trained AcousticGuard production model
-!models/acousticguard.keras
 *.pt
 *.pth
 *.onnx
