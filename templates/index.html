@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AcousticGuard AI - Accessible Hazard Sound Detection</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-dark">
+
+  <!-- Visual Strobe Overlay for High-Priority Hazard Alerts -->
+  <div id="strobeOverlay" class="strobe-overlay">
+    <div class="strobe-content">
+      <div class="strobe-icon">🚨</div>
+      <div class="strobe-text" id="strobeText">HAZARD DETECTED!</div>
+      <div class="strobe-subtext" id="strobeSubtext">Check surroundings immediately</div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-badge">🛡️ AI ACCESSIBILITY</div>
+        <h1>AcousticGuard <span class="highlight">AI</span></h1>
+        <p class="subtitle">Real-Time Environmental Sound Classification & Multi-Modal Hazard Alert System</p>
+      </div>
+      <div class="header-status">
+        <div id="connectionStatus" class="status-pill status-ready">
+          <span class="status-dot"></span> System Ready
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Alert Banner -->
+    <section class="banner-section">
+      <div id="mainAlertBanner" class="alert-banner alert-idle">
+        <div class="banner-left">
+          <span id="bannerIcon" class="banner-icon">🎧</span>
+          <div class="banner-info">
+            <h2 id="bannerTitle">Monitoring Ambient Sound</h2>
+            <p id="bannerSubtitle">Awaiting live audio input, uploaded file, or test sample...</p>
+          </div>
+        </div>
+        <div class="banner-right">
+          <div class="stat-box">
+            <span class="stat-label">Confidence</span>
+            <span id="bannerConfidence" class="stat-val">--%</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Alert Engine</span>
+            <span id="bannerEngineStatus" class="stat-val">STANDBY</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Grid -->
+    <main class="dashboard-grid">
+
+      <!-- Left Column: Audio Inputs & Live Capture -->
+      <section class="card input-card">
+        <div class="card-header">
+          <h3>🎙️ Audio Ingestion</h3>
+          <span class="card-tag">16 kHz Mono</span>
+        </div>
+
+        <!-- Input Mode Tabs -->
+        <div class="tabs-nav">
+          <button class="tab-btn active" data-tab="micTab">Live Mic</button>
+          <button class="tab-btn" data-tab="uploadTab">Upload File</button>
+          <button class="tab-btn" data-tab="sampleTab">Test Samples</button>
+        </div>
+
+        <!-- Tab 1: Live Mic -->
+        <div id="micTab" class="tab-pane active">
+          <div class="mic-controls">
+            <button id="micToggleBtn" class="btn btn-primary btn-large">
+              <span class="btn-icon">🎙️</span> <span id="micBtnText">Start Real-Time Listening</span>
+            </button>
+            <p class="input-hint">Captures 3-second audio windows and feeds to CNN classifier in real-time.</p>
+          </div>
+          <div class="visualizer-container">
+            <canvas id="waveformCanvas" width="600" height="120"></canvas>
+            <div id="micRecordingBadge" class="rec-badge hidden">
+              <span class="rec-dot"></span> LIVE AUDIO STREAM
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Upload File -->
+        <div id="uploadTab" class="tab-pane">
+          <div id="dropZone" class="drop-zone">
+            <div class="drop-content">
+              <span class="drop-icon">📁</span>
+              <p>Drag & Drop an audio file here, or <label for="fileInput" class="browse-link">Browse</label></p>
+              <span class="drop-hint">Supports WAV, MP3, OGG, WebM (Auto-resampled to 16 kHz)</span>
+              <input type="file" id="fileInput" accept="audio/*" class="file-input-hidden">
+            </div>
+          </div>
+          <div id="selectedFileInfo" class="selected-file-info hidden">
+            <span class="file-name" id="selectedFileName">audio_clip.wav</span>
+            <button id="analyzeFileBtn" class="btn btn-success">Analyze Audio</button>
+          </div>
+        </div>
+
+        <!-- Tab 3: Built-in Reference Test Samples -->
+        <div id="sampleTab" class="tab-pane">
+          <p class="input-hint">Instant 1-click test clips to verify model predictions and visual strobe:</p>
+          <div class="sample-grid">
+            <button class="sample-btn hazard" data-sample="sample_siren.wav">
+              <span class="s-icon">🚨</span>
+              <span class="s-name">Siren</span>
+              <span class="s-tag danger">Hazard</span>
+            </button>
+            <button class="sample-btn hazard" data-sample="sample_car_horn.wav">
+              <span class="s-icon">🚗</span>
+              <span class="s-name">Car Horn</span>
+              <span class="s-tag danger">Hazard</span>
+            </button>
+            <button class="sample-btn hazard" data-sample="sample_fire_alarm.wav">
+              <span class="s-icon">🔥</span>
+              <span class="s-name">Fire Alarm</span>
+              <span class="s-tag danger">Hazard</span>
+            </button>
+            <button class="sample-btn hazard" data-sample="sample_glass_break.wav">
+              <span class="s-icon">🪟</span>
+              <span class="s-name">Glass Break</span>
+              <span class="s-tag danger">Hazard</span>
+            </button>
+            <button class="sample-btn" data-sample="sample_dog_bark.wav">
+              <span class="s-icon">🐕</span>
+              <span class="s-name">Dog Bark</span>
+              <span class="s-tag">Awareness</span>
+            </button>
+            <button class="sample-btn" data-sample="sample_door_knock.wav">
+              <span class="s-icon">🚪</span>
+              <span class="s-name">Door Knock</span>
+              <span class="s-tag">Awareness</span>
+            </button>
+            <button class="sample-btn" data-sample="sample_baby_cry.wav">
+              <span class="s-icon">👶</span>
+              <span class="s-name">Baby Cry</span>
+              <span class="s-tag">Awareness</span>
+            </button>
+            <button class="sample-btn" data-sample="sample_ambient.wav">
+              <span class="s-icon">🌿</span>
+              <span class="s-name">Ambient</span>
+              <span class="s-tag normal">Normal</span>
+            </button>
+          </div>
+          <!-- Audio Player for sample preview -->
+          <div class="audio-player-wrapper">
+            <audio id="sampleAudioPlayer" controls class="sample-player hidden"></audio>
+          </div>
+        </div>
+
+        <!-- Accessibility Controls -->
+        <div class="accessibility-settings">
+          <h4>♿ Accessibility & Alert Settings</h4>
+          <div class="settings-row">
+            <label class="toggle-control">
+              <input type="checkbox" id="toggleStrobe" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Visual Strobe Alert (Deaf/Hard of Hearing)</span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label class="toggle-control">
+              <input type="checkbox" id="toggleVibration" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Haptic Device Vibration</span>
+            </label>
+          </div>
+          <div class="settings-row slider-row">
+            <div class="slider-header">
+              <span>Confidence Threshold:</span>
+              <strong id="thresholdVal">70%</strong>
+            </div>
+            <input type="range" id="thresholdSlider" min="50" max="95" value="70" step="5">
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Model Posterior Probabilities & Stabilization Telemetry -->
+      <section class="card output-card">
+        <div class="card-header">
+          <h3>📊 CNN Posterior Probabilities</h3>
+          <span class="card-tag">Log-Mel (128x94)</span>
+        </div>
+
+        <div class="probabilities-list" id="probabilitiesList">
+          {% for cls in classes %}
+          <div class="prob-item" data-class="{{ cls }}">
+            <div class="prob-header">
+              <span class="prob-name">
+                {% if cls in hazards %}⚠️{% else %}•{% endif %} {{ cls }}
+              </span>
+              <span class="prob-value" id="val-{{ loop.index0 }}">0.0%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill" id="bar-{{ loop.index0 }}" style="width: 0%;"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Telemetry Details -->
+        <div class="telemetry-panel">
+          <div class="telemetry-item">
+            <span class="t-label">Prediction Status</span>
+            <span class="t-value" id="telemStatus">IDLE</span>
+          </div>
+          <div class="telemetry-item">
+            <span class="t-label">Temporal Agreement</span>
+            <span class="t-value" id="telemTemporal">Queue Ready</span>
+          </div>
+          <div class="telemetry-item">
+            <span class="t-label">Reason / Gate</span>
+            <span class="t-value" id="telemReason">Standing by for audio</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Recent Incident History -->
+    <section class="card history-card">
+      <div class="card-header">
+        <h3>📋 Recent Hazard Incident Log</h3>
+        <button id="clearHistoryBtn" class="btn btn-secondary btn-small">Clear Log</button>
+      </div>
+      <div class="table-responsive">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timestamp</th>
+              <th>Detected Hazard Sound</th>
+              <th>Confidence</th>
+              <th>Dispatch Status</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <tr class="empty-row">
+              <td colspan="5">No hazard incidents recorded yet. Trigger a sound above to test!</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p><strong>AcousticGuard AI</strong> &bull; Real-Time Environmental Sound Classification & Accessible Alert System</p>
+      <p class="credits">Developed by <strong>Group 17</strong> (Sakina Tikiwala, Sagar Sen, Sahil Jasuja) &bull; Medi-Caps University</p>
+    </footer>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

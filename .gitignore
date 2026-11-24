@@ -85,7 +85,9 @@ ESC-50-master/
 *.rar
 *.7z
 
-# Retain directory structure with .gitkeep
+# Whitelist reference test samples & keepers
+!samples/
+!samples/*.wav
 !data/**/.gitkeep
 !models/**/.gitkeep
 
@@ -98,6 +100,9 @@ models/variables/
 *.h5
 *.keras
 *.ckpt
+
+# Whitelist trained AcousticGuard production model
+!models/acousticguard.keras
 *.pt
 *.pth
 *.onnx
