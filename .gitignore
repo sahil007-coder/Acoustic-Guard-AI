@@ -91,6 +91,12 @@ ESC-50-master/
 !data/**/.gitkeep
 !models/**/.gitkeep
 
+# Presentations & Office Docs (Stored safely in Downloads folder)
+*.pptx
+*.ppt
+*.docx
+*.xlsx
+
 # Machine Learning Models, Weights, and Checkpoints (Trained automatically on startup)
 models/*.h5
 models/*.keras
