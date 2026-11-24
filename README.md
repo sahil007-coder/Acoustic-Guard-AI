@@ -1,3 +1,16 @@
+---
+title: Acoustic Guard AI
+emoji: 🛡️
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 6.32.0
+python_version: 3.11
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # AcousticGuard AI 🛡️
 > **Real-Time Environmental Sound Classification & Accessible Alert System**
 
