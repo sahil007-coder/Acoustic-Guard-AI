@@ -1,6 +1,5 @@
 # Auto detect text files and normalize line endings
 * text=auto
-
 # Binary files
 *.wav binary
 *.mp3 binary
@@ -9,7 +8,7 @@
 *.npy binary
 *.npz binary
 *.h5 binary
-*.keras binary
+*.keras filter=lfs diff=lfs merge=lfs -text
 *.tflite binary
 *.onnx binary
 *.pt binary
