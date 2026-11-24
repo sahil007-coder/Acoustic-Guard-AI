@@ -4,16 +4,23 @@ Alternative 1-Click Interface tailored for Hugging Face Spaces (Streamlit SDK).
 """
 
 import os
-import io
-import time
+import sys
+import warnings
+import tempfile
+
+# Complete suppression of backend stderr warnings
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["MPLCONFIGDIR"] = os.path.join(tempfile.gettempdir(), "matplotlib")
+warnings.filterwarnings("ignore")
+
 import streamlit as st
 import numpy as np
-import soundfile as sf
 import matplotlib.pyplot as plt
 
 from audio_utils import (
     SAMPLE_RATE, DURATION, extract_log_mel_spectrogram, load_audio_from_bytes,
-    load_audio_from_file, generate_synthetic_sound
+    load_audio_from_file
 )
 from model import AcousticGuardModel, CLASSES, HAZARD_CLASSES
 from alert_manager import AlertManager
@@ -67,7 +74,7 @@ with tab2:
     st.write("Click any sample below to evaluate immediate detection response:")
     col1, col2, col3, col4 = st.columns(4)
     samples_dir = os.path.join(os.path.dirname(__file__), "samples")
-    
+
     sample_choice = None
     if col1.button("🚨 Siren (Hazard)"):
         sample_choice = "sample_siren.wav"
