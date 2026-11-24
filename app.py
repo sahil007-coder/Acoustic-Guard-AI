@@ -5,6 +5,17 @@ Accessible real-time environmental sound classification and hazard alerts.
 """
 
 import os
+try:
+    import spaces
+except ImportError:
+    class _SpacesMock:
+        @staticmethod
+        def GPU(func=None, **kwargs):
+            if func is None:
+                return lambda f: f
+            return func
+    spaces = _SpacesMock()
+
 import gradio as gr
 import numpy as np
 import matplotlib.pyplot as plt
@@ -81,6 +92,7 @@ CUSTOM_CSS = """
 """
 
 
+@spaces.GPU
 def classify_audio(audio_path, threshold):
     """Executes feature extraction, CNN inference, and prediction stabilization."""
     if not audio_path:
