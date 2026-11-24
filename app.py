@@ -92,7 +92,7 @@ CUSTOM_CSS = """
 """
 
 
-@spaces.GPU
+@spaces.GPU(duration=15)
 def classify_audio(audio_path, threshold):
     """Executes feature extraction, CNN inference, and prediction stabilization."""
     if not audio_path:
@@ -271,14 +271,20 @@ with gr.Blocks(title="AcousticGuard AI - Accessible Hazard Detection", css=CUSTO
         label="Stabilized Incident Log"
     )
 
-    # Event Wiring
+    # Event Wiring: triggers only on explicit click, recording completion, or file upload
     analyze_btn.click(
         fn=classify_audio,
         inputs=[audio_input, threshold_slider],
         outputs=[alert_output, label_output, spectrogram_plot, history_table]
     )
 
-    audio_input.change(
+    audio_input.stop_recording(
+        fn=classify_audio,
+        inputs=[audio_input, threshold_slider],
+        outputs=[alert_output, label_output, spectrogram_plot, history_table]
+    )
+
+    audio_input.upload(
         fn=classify_audio,
         inputs=[audio_input, threshold_slider],
         outputs=[alert_output, label_output, spectrogram_plot, history_table]
