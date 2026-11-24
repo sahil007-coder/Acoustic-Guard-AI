@@ -18,6 +18,15 @@ import numpy as np
 import tensorflow as tf
 tf.get_logger().setLevel("ERROR")
 
+# Enable dynamic GPU memory growth to prevent ZeroGPU VRAM overload
+try:
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+except Exception:
+    pass
+
 from tensorflow import keras
 from keras import layers
 

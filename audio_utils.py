@@ -65,6 +65,11 @@ def preprocess_audio_array(y: np.ndarray, sr: int) -> np.ndarray:
 
     y = y.astype(np.float32)
 
+    # Immediately clamp to 3 seconds before resampling to prevent memory/GPU overload
+    max_input_samples = int(sr * DURATION)
+    if len(y) > max_input_samples:
+        y = y[:max_input_samples]
+
     # Resample to 16 kHz if different
     if sr != SAMPLE_RATE and len(y) > 0:
         new_length = int(len(y) * (SAMPLE_RATE / sr))
