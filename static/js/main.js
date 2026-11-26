@@ -91,46 +91,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let audioContext = null;
   let mediaStream = null;
   let analyserNode = null;
-  let audioProcessorNode = null;
+  let scriptProcessor = null;
   let pcmBuffer = [];
-  let isSendingInference = false;
+  let isInferring = false;
   let animationFrameId = null;
   let currentFile = null;
   let strobeTimeout = null;
-
-  // 16-bit PCM WAV Encoder (universally decoded by Python soundfile & scipy)
-  function encodeWAV(samples, sampleRate = 16000) {
-    const buffer = new ArrayBuffer(44 + samples.length * 2);
-    const view = new DataView(buffer);
-
-    const writeString = (offset, string) => {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
-      }
-    };
-
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + samples.length * 2, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM
-    view.setUint16(22, 1, true); // Mono channel
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true); // Byte rate
-    view.setUint16(32, 2, true); // Block align
-    view.setUint16(34, 16, true); // 16-bit
-    writeString(36, 'data');
-    view.setUint32(40, samples.length * 2, true);
-
-    let offset = 44;
-    for (let i = 0; i < samples.length; i++, offset += 2) {
-      const s = Math.max(-1, Math.min(1, samples[i]));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-
-    return new Blob([buffer], { type: 'audio/wav' });
-  }
+  const TARGET_SAMPLES = 48000; // 3.0 seconds at 16 kHz
 
   // Icons Mapping
   const classIcons = {
@@ -222,12 +189,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   stopVisualizer();
 
-  // State Variables for Live PCM Capture
-  let scriptProcessor = null;
-  let pcmBuffer = [];
-  let isInferring = false;
-  const TARGET_SAMPLES = 48000; // 3.0 seconds at 16 kHz
-
   // ==========================================
   // 4. Live Microphone Real-Time Stream
   // ==========================================
@@ -246,11 +207,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       try {
-        // Request single-channel 16 kHz audio without noise destruction
+        // Request single-channel audio without constraint rejection
         mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            channelCount: 1,
-            sampleRate: 16000,
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: true
@@ -258,7 +217,15 @@ document.addEventListener("DOMContentLoaded", () => {
           video: false
         });
 
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+
+        const actualSr = audioContext.sampleRate || 16000;
+        const targetSamples = Math.floor(actualSr * 3.0);
+        const slideSamples = Math.floor(targetSamples / 2);
+
         const source = audioContext.createMediaStreamSource(mediaStream);
 
         // Visualizer Analyser Node
@@ -280,15 +247,13 @@ document.addEventListener("DOMContentLoaded", () => {
             pcmBuffer.push(inputData[i]);
           }
 
-          // When we accumulate 3 seconds of audio (48,000 samples)
-          if (pcmBuffer.length >= TARGET_SAMPLES && !isInferring) {
-            const chunk = pcmBuffer.slice(0, TARGET_SAMPLES);
-            // 1.5-second slide for rapid continuous detection
-            pcmBuffer = pcmBuffer.slice(24000);
+          // When we accumulate 3 seconds of audio at hardware sample rate
+          if (pcmBuffer.length >= targetSamples && !isInferring) {
+            const chunk = pcmBuffer.slice(0, targetSamples);
+            pcmBuffer = pcmBuffer.slice(slideSamples);
 
             isInferring = true;
             try {
-              const actualSr = audioContext.sampleRate || 16000;
               const wavBlob = encodeWAV(chunk, actualSr);
               await sendAudioForPrediction(wavBlob);
             } catch (err) {
