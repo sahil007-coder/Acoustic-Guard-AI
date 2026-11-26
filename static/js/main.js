@@ -19,8 +19,52 @@ document.addEventListener("DOMContentLoaded", () => {
   const micToggleBtn = document.getElementById("micToggleBtn");
   const micBtnText = document.getElementById("micBtnText");
   const micRecordingBadge = document.getElementById("micRecordingBadge");
+  const micSecurityWarning = document.getElementById("micSecurityWarning");
   const waveformCanvas = document.getElementById("waveformCanvas");
   const canvasCtx = waveformCanvas.getContext("2d");
+
+  // Check Secure Context on startup
+  const isSecureOrigin = window.isSecureContext || 
+    window.location.hostname === "localhost" || 
+    window.location.hostname === "127.0.0.1";
+  
+  if (!isSecureOrigin && micSecurityWarning) {
+    micSecurityWarning.classList.remove("hidden");
+  }
+
+  // Fast in-memory 16-bit PCM WAV Encoder for instant server compatibility
+  function encodeWAV(samples, sampleRate = 16000) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    function writeString(offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    }
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, 1, true); // Mono channel
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // Byte rate
+    view.setUint16(32, 2, true); // Block align
+    view.setUint16(34, 16, true); // 16-bit
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      let s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
 
   const dropZone = document.getElementById("dropZone");
   const fileInput = document.getElementById("fileInput");
@@ -47,10 +91,46 @@ document.addEventListener("DOMContentLoaded", () => {
   let audioContext = null;
   let mediaStream = null;
   let analyserNode = null;
-  let mediaRecorder = null;
+  let audioProcessorNode = null;
+  let pcmBuffer = [];
+  let isSendingInference = false;
   let animationFrameId = null;
   let currentFile = null;
   let strobeTimeout = null;
+
+  // 16-bit PCM WAV Encoder (universally decoded by Python soundfile & scipy)
+  function encodeWAV(samples, sampleRate = 16000) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // Mono channel
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // Byte rate
+    view.setUint16(32, 2, true); // Block align
+    view.setUint16(34, 16, true); // 16-bit
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
 
   // Icons Mapping
   const classIcons = {
@@ -142,75 +222,114 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   stopVisualizer();
 
+  // State Variables for Live PCM Capture
+  let scriptProcessor = null;
+  let pcmBuffer = [];
+  let isInferring = false;
+  const TARGET_SAMPLES = 48000; // 3.0 seconds at 16 kHz
+
   // ==========================================
   // 4. Live Microphone Real-Time Stream
   // ==========================================
   async function toggleMicrophone() {
     if (!isListening) {
+      // 1. Validate Browser MediaDevices Availability (Secure Context Check)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (micSecurityWarning) micSecurityWarning.classList.remove("hidden");
+        alert(
+          "🔒 Microphone Access Blocked by Browser Security!\n\n" +
+          "Modern browsers disable microphone access on unencrypted IP addresses (http://" + window.location.hostname + ":5000).\n\n" +
+          "👉 If on this laptop: Please open http://localhost:5000 (or http://127.0.0.1:5000).\n" +
+          "📱 If on a phone: Run 'npx localtunnel --port 5000' for free HTTPS or enable the Chrome insecure origin flag."
+        );
+        return;
+      }
+
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        // Request single-channel 16 kHz audio without noise destruction
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: true
+          },
+          video: false
+        });
+
         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const source = audioContext.createMediaStreamSource(mediaStream);
+
+        // Visualizer Analyser Node
         analyserNode = audioContext.createAnalyser();
         analyserNode.fftSize = 2048;
         source.connect(analyserNode);
 
-        // MediaRecorder for chunk inference
-        let recordedChunks = [];
-        mediaRecorder = new MediaRecorder(mediaStream);
+        // PCM Sample Collector via ScriptProcessor
+        pcmBuffer = [];
+        const bufferSize = 4096;
+        scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+        source.connect(scriptProcessor);
+        scriptProcessor.connect(audioContext.destination);
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunks.push(event.data);
+        scriptProcessor.onaudioprocess = async (e) => {
+          if (!isListening) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          for (let i = 0; i < inputData.length; i++) {
+            pcmBuffer.push(inputData[i]);
+          }
+
+          // When we accumulate 3 seconds of audio (48,000 samples)
+          if (pcmBuffer.length >= TARGET_SAMPLES && !isInferring) {
+            const chunk = pcmBuffer.slice(0, TARGET_SAMPLES);
+            // 1.5-second slide for rapid continuous detection
+            pcmBuffer = pcmBuffer.slice(24000);
+
+            isInferring = true;
+            try {
+              const actualSr = audioContext.sampleRate || 16000;
+              const wavBlob = encodeWAV(chunk, actualSr);
+              await sendAudioForPrediction(wavBlob);
+            } catch (err) {
+              console.error("Live streaming inference error:", err);
+            } finally {
+              isInferring = false;
+            }
           }
         };
-
-        mediaRecorder.onstop = async () => {
-          if (recordedChunks.length > 0 && isListening) {
-            const audioBlob = new Blob(recordedChunks, { type: "audio/webm" });
-            recordedChunks = [];
-            await sendAudioForPrediction(audioBlob);
-            // Restart recording for next 3-second cycle
-            if (isListening) mediaRecorder.start();
-          }
-        };
-
-        // Start cycle: record 3 seconds chunks
-        mediaRecorder.start();
-        const recordInterval = setInterval(() => {
-          if (!isListening) {
-            clearInterval(recordInterval);
-            return;
-          }
-          if (mediaRecorder.state === "recording") {
-            mediaRecorder.stop();
-          }
-        }, 3000);
 
         isListening = true;
         micToggleBtn.classList.add("btn-recording");
         micBtnText.textContent = "Stop Real-Time Listening";
         micRecordingBadge.classList.remove("hidden");
+        if (micSecurityWarning) micSecurityWarning.classList.add("hidden");
         startVisualizer();
 
-        bannerTitle.textContent = "Listening to Ambient Audio...";
-        bannerSubtitle.textContent = "Streaming 3-second audio windows to CNN inference pipeline";
+        bannerTitle.textContent = "Listening to Live Ambient Audio...";
+        bannerSubtitle.textContent = "Streaming 3-second PCM windows to CNN inference pipeline";
       } catch (err) {
+        console.error("Microphone Access Error:", err);
         alert("Microphone Access Error: " + err.message);
       }
     } else {
       // Stop listening
       isListening = false;
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
+      if (scriptProcessor) {
+        scriptProcessor.disconnect();
+        scriptProcessor.onaudioprocess = null;
+        scriptProcessor = null;
       }
       if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
       }
       if (audioContext && audioContext.state !== "closed") {
         audioContext.close();
+        audioContext = null;
       }
 
+      pcmBuffer = [];
       micToggleBtn.classList.remove("btn-recording");
       micBtnText.textContent = "Start Real-Time Listening";
       micRecordingBadge.classList.add("hidden");
@@ -300,7 +419,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================
   async function sendAudioForPrediction(audioBlobOrFile) {
     const formData = new FormData();
-    formData.append("audio", audioBlobOrFile);
+    const fileName = audioBlobOrFile.name || "live_stream.wav";
+    formData.append("audio", audioBlobOrFile, fileName);
 
     try {
       bannerEngineStatus.textContent = "INFERENCE";
@@ -329,6 +449,7 @@ document.addEventListener("DOMContentLoaded", () => {
       predicted_class,
       confidence,
       is_hazard,
+      is_awareness,
       status,
       alert_triggered,
       reason,
@@ -346,11 +467,21 @@ document.addEventListener("DOMContentLoaded", () => {
     bannerEngineStatus.textContent = status;
 
     // Reset styles
-    mainAlertBanner.classList.remove("alert-idle", "alert-danger-active", "alert-normal-active");
+    mainAlertBanner.classList.remove("alert-idle", "alert-danger-active", "alert-awareness-active", "alert-normal-active");
 
-    if (alert_triggered) {
+    const isAwarenessClass = is_awareness || [
+      "Dog Barking", "Door Knock / Bell", "Crying Baby"
+    ].includes(predicted_class);
+
+    if (alert_triggered && is_hazard) {
       mainAlertBanner.classList.add("alert-danger-active");
       triggerMultiModalAlert(predicted_class, confPct);
+    } else if (isAwarenessClass && confidence >= 0.5) {
+      mainAlertBanner.classList.add("alert-awareness-active");
+      // Gentle awareness haptic pulse on mobile devices
+      if (toggleVibration && toggleVibration.checked && "vibrate" in navigator) {
+        navigator.vibrate(200);
+      }
     } else if (is_hazard) {
       mainAlertBanner.classList.add("alert-danger-active");
     } else {

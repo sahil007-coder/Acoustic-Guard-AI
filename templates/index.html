@@ -77,6 +77,16 @@
 
         <!-- Tab 1: Live Mic -->
         <div id="micTab" class="tab-pane active">
+          <!-- Browser Security Notice (Visible when accessed via non-localhost HTTP IP) -->
+          <div id="micSecurityWarning" class="mic-security-warning hidden">
+            <span style="font-size: 1.4rem;">🔒</span>
+            <div>
+              <strong>Microphone Security Notice:</strong> Browsers block microphone access on plain IP addresses (<code>http://10.x.x.x</code>).<br>
+              👉 <b>On this laptop:</b> Open <a href="http://localhost:5000" id="localhostLink" style="font-weight: bold; color: #38bdf8;">http://localhost:5000</a> to enable instant microphone access.<br>
+              📱 <b>On mobile:</b> Open via HTTPS tunnel (<code>npx localtunnel --port 5000</code>) or enable Chrome flag <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.
+            </div>
+          </div>
+
           <div class="mic-controls">
             <button id="micToggleBtn" class="btn btn-primary btn-large">
               <span class="btn-icon">🎙️</span> <span id="micBtnText">Start Real-Time Listening</span>

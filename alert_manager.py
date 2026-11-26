@@ -13,6 +13,13 @@ CONFIDENCE_THRESHOLD = 0.70    # Minimum posterior probability required
 QUEUE_SIZE = 3                 # Number of consecutive temporal frames required
 COOLDOWN_SECONDS = 3.0         # Suppression interval between identical hazard triggers
 
+# Acoustic Awareness classes that trigger visual accessibility notifications for deaf users
+AWARENESS_CLASSES = {
+    "Dog Barking",
+    "Door Knock / Bell",
+    "Crying Baby"
+}
+
 
 class AlertManager:
     """
@@ -106,14 +113,35 @@ class AlertManager:
                 else:
                     status = "WAITING_CONFIRMATION"
                     reason = f"Waiting for temporal confirmation ({len(valid_entries)}/{self.queue_size} frames)"
+            elif predicted_class in AWARENESS_CLASSES:
+                # Acoustic Awareness Event (Accessibility for Deaf/Hard-of-Hearing)
+                status = "AWARENESS_ALERT"
+                alert_triggered = True
+                reason = f"Acoustic Awareness: {predicted_class} ({confidence*100:.1f}%)"
+
+                # Cooldown check for audit logging
+                last_time = self.last_alert_times.get(predicted_class, 0.0)
+                if current_time - last_time >= self.cooldown_seconds:
+                    self.last_alert_times[predicted_class] = current_time
+                    event = {
+                        "id": len(self.alert_audit_log) + 1,
+                        "timestamp": iso_timestamp,
+                        "hazard": predicted_class,
+                        "confidence": f"{confidence * 100:.1f}%",
+                        "status": "NOTIFIED"
+                    }
+                    self.alert_audit_log.insert(0, event)
+                    if len(self.alert_audit_log) > 50:
+                        self.alert_audit_log.pop()
             else:
                 status = "NORMAL"
-                reason = f"Detected non-hazard sound: {predicted_class}"
+                reason = f"Detected ambient sound: {predicted_class}"
 
         return {
             "predicted_class": predicted_class,
             "confidence": confidence,
             "is_hazard": is_hazard,
+            "is_awareness": predicted_class in AWARENESS_CLASSES,
             "status": status,
             "alert_triggered": alert_triggered,
             "reason": reason,

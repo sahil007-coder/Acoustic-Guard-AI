@@ -92,22 +92,29 @@ def preprocess_audio_array(y: np.ndarray, sr: int) -> np.ndarray:
 
 def load_audio_from_bytes(audio_bytes: bytes) -> np.ndarray:
     """
-    Decodes audio bytes (WAV, OGG, FLAC, WebM) and returns standardized 16 kHz mono numpy array.
+    Decodes audio bytes (WAV, OGG, FLAC, WebM, MP3) and returns standardized 16 kHz mono numpy array.
     """
     try:
         with io.BytesIO(audio_bytes) as bio:
             y, sr = sf.read(bio)
             return preprocess_audio_array(y, sr)
     except Exception:
-        # Fallback to scipy wavfile if soundfile fails
+        # Fallback 1: scipy wavfile for pure uncompressed WAV
         try:
             from scipy.io import wavfile
             with io.BytesIO(audio_bytes) as bio:
                 sr, y = wavfile.read(bio)
                 return preprocess_audio_array(y, sr)
         except Exception:
-            # If undecodable, generate a quiet ambient placeholder
-            return np.zeros(TARGET_SAMPLES, dtype=np.float32)
+            # Fallback 2: librosa for WebM, MP3, OGG containers
+            try:
+                import librosa
+                with io.BytesIO(audio_bytes) as bio:
+                    y, sr = librosa.load(bio, sr=SAMPLE_RATE, mono=True)
+                    return preprocess_audio_array(y, sr)
+            except Exception:
+                # If undecodable, generate a quiet ambient placeholder
+                return np.zeros(TARGET_SAMPLES, dtype=np.float32)
 
 
 def load_audio_from_file(file_path: str) -> np.ndarray:
